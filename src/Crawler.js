@@ -3,6 +3,8 @@
 import url from 'url'
 import path from 'path'
 import glob from 'glob-to-regexp'
+// todo(seb): remove comment line, remove chromy
+// import puppeteer from 'puppeteer'
 import Chromy from 'chromy'
 
 export default class Crawler {
@@ -14,9 +16,13 @@ export default class Crawler {
     this.paths = [...options.include]
     this.exclude = options.exclude.map((g) => glob(g, { extended: true, globstar: true }))
     this.processed = {}
-    this.chromy = new Chromy({ visible: false })
+    this.chromy = new Chromy({ visible: true })
       .chain()
-      .console((text) => console.log(text))
+      .console((text) => {
+        if(typeof text === 'object') {
+        }
+      });
+
   }
 
   crawl (handler) {
@@ -40,24 +46,28 @@ export default class Crawler {
     }
 
     return this.chromy
+      .blockUrls(['gtm.js'])
       .goto(`${this.protocol}//${this.host}${urlPath}`)
       .evaluate(() => {
         const tagAttributeMap = {
           'a': 'href',
-          'iframe': 'src'
         }
 
         const html = window.document.documentElement.outerHTML
+
 
         const urls = Object.keys(tagAttributeMap).reduce((arr, tagName) => {
           const urlAttribute = tagAttributeMap[tagName]
           const elements = document.querySelectorAll(`${tagName}[${urlAttribute}]`)
           const urls = Array.from(elements).map(element => {
+            if (!element) { return; }
+            if (element.getAttribute('href').startsWith('#')) { return; }
             if (element.getAttribute('target') === '_blank') return
             return element.getAttribute(urlAttribute)
           })
           return arr.concat(urls)
         }, [])
+
         return {
           html,
           urls
@@ -65,6 +75,7 @@ export default class Crawler {
       })
       .result((res) => {
         res.urls.forEach(u => {
+          if(!u) return;
           const href = url.parse(u)
           if (href.protocol || href.host || href.path === null) return
           const relativePath = url.resolve(urlPath, href.path)
